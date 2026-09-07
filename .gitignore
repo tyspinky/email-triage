@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets — never commit these
+.env
+credentials/*.json
+
+# Local state
+data/*.db
+data/*.log
+dashboard/index.html
+dashboard/.summary_cache.json

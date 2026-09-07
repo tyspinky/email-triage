@@ -1,0 +1,47 @@
+databases:
+  - name: email-triage-db
+    plan: starter
+    region: oregon
+
+services:
+  - type: web
+    name: email-triage-web
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -w 2 -b 0.0.0.0:$PORT app:app"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: email-triage-db, property: connectionString }
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        value: https://email-triage-web.onrender.com/oauth/callback
+      - key: TOKEN_ENCRYPTION_KEYS
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - type: worker
+    name: email-triage-scheduler
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python scheduler.py"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: email-triage-db, property: connectionString }
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEYS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

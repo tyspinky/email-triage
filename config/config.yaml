@@ -1,0 +1,155 @@
+# Email triage configuration.
+# Edit `rules` and `folders` to match your real inbox once things are running.
+
+folders:
+  - Clients
+  - Internal
+  - Finance
+  - Vendors
+  - Security
+  - Newsletters
+  - Other
+
+default_folder: Other
+
+# Urgency tiers, most to least urgent. Keep this order — code assumes it.
+urgency_tiers:
+  - Urgent
+  - Today
+  - ThisWeek
+  - NoAction
+
+default_urgency: NoAction
+
+# Gmail label colors. Must be from Gmail's fixed palette (arbitrary hex is
+# rejected by the API) — these have been verified against the real API.
+# Folders and urgency tiers are colored independently; each is applied to
+# that label regardless of the other.
+folder_colors:
+  Clients: { background: "#4a86e8", text: "#ffffff" }   # blue
+  Internal: { background: "#a479e2", text: "#ffffff" }  # purple
+  Finance: { background: "#16a765", text: "#ffffff" }   # green
+  Vendors: { background: "#f691b3", text: "#000000" }   # pink
+  Security: { background: "#cc3a21", text: "#ffffff" }  # dark red
+  Newsletters: { background: "#999999", text: "#ffffff" } # muted gray
+  Other: { background: "#666666", text: "#ffffff" }     # darker muted gray
+
+urgency_colors:
+  Urgent: { background: "#cc3a21", text: "#ffffff" }    # red
+  Today: { background: "#ffad47", text: "#000000" }     # orange
+  ThisWeek: { background: "#fad165", text: "#000000" }  # yellow
+  NoAction: { background: "#cccccc", text: "#000000" }  # light gray
+
+gmail:
+  # Gmail search query used to select candidate messages each run.
+  # "Triage/Processed" is applied to every message this tool has already handled,
+  # so re-running the script won't reclassify the same message twice.
+  # Scoped to unread mail from the last few days, so this only triages new/
+  # incoming email rather than a large historical unread backlog. Widen or
+  # narrow the newer_than window as you like.
+  query: "in:inbox is:unread newer_than:3d -label:Triage/Processed"
+  # All labels this tool creates are nested under this prefix, e.g. "Triage/Clients".
+  label_prefix: "Triage"
+  # If true, archive (remove from inbox) after labeling. Keep false at first so you
+  # can sanity-check classifications in the inbox before trusting the tool.
+  remove_from_inbox: false
+
+llm:
+  model: "claude-haiku-4-5-20251001"
+  max_body_chars: 300
+  # Skipped entirely if no rule matches AND the LLM call would be needed but
+  # ANTHROPIC_API_KEY is not set — message falls back to default_folder/default_urgency.
+  enabled: true
+
+# Rules are evaluated top to bottom. The first rule whose conditions all match wins.
+# Within one condition, a list of values is OR'd (any match); conditions on one rule
+# are AND'd (all must match).
+#
+# Supported condition keys:
+#   sender_domain            - list of domains, e.g. ["github.com"]
+#   sender_address            - list of exact From addresses
+#   sender_local_part_prefix  - list of prefixes on the part before '@' (e.g. "no-reply")
+#   subject_contains          - list of substrings, case-insensitive
+#   has_list_unsubscribe      - true/false, checks for a List-Unsubscribe header
+rules:
+  - name: "Login and account security alerts"
+    folder: Security
+    urgency: Today
+    conditions:
+      subject_contains:
+        - "security alert"
+        - "new login"
+        - "new sign-in"
+        - "signed in"
+        - "new passkey"
+        - "password change"
+        - "password was changed"
+        - "verify your email"
+        - "verify your account"
+        - "single-use code"
+        - "security code"
+        - "account security"
+        - "new device"
+
+  - name: "Newsletter-style senders"
+    folder: Newsletters
+    urgency: NoAction
+    conditions:
+      sender_local_part_prefix:
+        - "no-reply"
+        - "noreply"
+        - "no.reply"
+        - "newsletter"
+        - "notifications"
+        - "notification"
+        - "digest"
+        - "hello"
+        - "updates"
+
+  - name: "Bulk mail with unsubscribe header"
+    folder: Newsletters
+    urgency: NoAction
+    conditions:
+      has_list_unsubscribe: true
+
+  # High-frequency marketing sender observed repeatedly falling through to
+  # the LLM — a direct rule here means every future email from them is free.
+  - name: "AliExpress marketing"
+    folder: Newsletters
+    urgency: NoAction
+    conditions:
+      sender_domain:
+        - "mail.aliexpress.com"
+        - "aliexpress.com"
+
+  - name: "Example: known client domain"
+    folder: Clients
+    urgency: Today
+    conditions:
+      sender_domain:
+        - "example-client.com"
+
+  - name: "Example: internal company domain"
+    folder: Internal
+    urgency: ThisWeek
+    conditions:
+      sender_domain:
+        - "yourcompany.com"
+
+  - name: "Finance keywords in subject"
+    folder: Finance
+    urgency: ThisWeek
+    conditions:
+      subject_contains:
+        - "invoice"
+        - "receipt"
+        - "payment"
+        - "statement"
+
+  - name: "Example: known vendor domains"
+    folder: Vendors
+    urgency: ThisWeek
+    conditions:
+      sender_domain:
+        - "stripe.com"
+        - "aws.amazon.com"
