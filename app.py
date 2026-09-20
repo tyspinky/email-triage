@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import timedelta
 
 from flask import Flask, g, jsonify, redirect, request, session, url_for
@@ -13,6 +14,14 @@ from src.dashboard import render_dashboard_for_account
 from src.oauth_flow import build_flow
 from src.search import DEFAULT_RESULT_COUNT, run_search
 from src.web_auth import close_db, current_account, get_db, login_required
+
+_OAUTH_REDIRECT_URI = env("GOOGLE_OAUTH_REDIRECT_URI", "")
+if _OAUTH_REDIRECT_URI.startswith("http://localhost") or _OAUTH_REDIRECT_URI.startswith("http://127.0.0.1"):
+    # oauthlib refuses to process an OAuth response over plain http:// by
+    # default. Production's redirect URI is always https:// (Render
+    # terminates TLS), so this only ever relaxes the check for a local dev
+    # server — never in production, since the startswith check above fails there.
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -30,8 +39,20 @@ app.config.update(
 app.teardown_appcontext(close_db)
 
 
-PRIVACY_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<title>Privacy Policy — Inbox Triage</title></head><body style="font-family:sans-serif;max-width:640px;margin:3rem auto;line-height:1.6">
+_THEME_STYLE = """<style>
+  :root { --bg: #f6f8fa; --fg: #1f2328; --muted: #656d76; --accent: #0969da; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --accent: #58a6ff; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); }
+  a { color: var(--accent); }
+</style>"""
+
+PRIVACY_HTML = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Inbox Triage</title>{_THEME_STYLE}</head>
+<body style="max-width:640px;margin:3rem auto;line-height:1.6;padding:0 1.25rem">
 <h1>Privacy Policy</h1>
 <p>Inbox Triage connects to your Gmail account (via Google's OAuth, scope
 <code>gmail.modify</code>) to read incoming mail, classify it, and apply
@@ -61,13 +82,15 @@ def privacy():
 def index():
     if current_account() is not None:
         return redirect(url_for("dashboard"))
-    return """<!doctype html><html><head><meta charset="utf-8">
-<title>Inbox Triage</title></head><body style="font-family:sans-serif;max-width:480px;margin:6rem auto;text-align:center">
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox Triage</title>{_THEME_STYLE}</head>
+<body style="max-width:480px;margin:6rem auto;text-align:center;padding:0 1.25rem">
 <h1>📬 Inbox Triage</h1>
-<p style="color:#666">Automated priority sorting for your inbox.</p>
-<p><a href="/login" style="display:inline-block;padding:0.7rem 1.5rem;background:#0969da;color:#fff;
+<p style="color:var(--muted)">Automated priority sorting for your inbox.</p>
+<p><a href="/login" style="display:inline-block;padding:0.7rem 1.5rem;background:var(--accent);color:#fff;
 border-radius:8px;text-decoration:none;font-weight:600">Sign in with Google</a></p>
-<p style="font-size:0.8rem;color:#999"><a href="/privacy">Privacy policy</a></p>
+<p style="font-size:0.8rem"><a href="/privacy" style="color:var(--muted)">Privacy policy</a></p>
 </body></html>"""
 
 
